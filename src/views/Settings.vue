@@ -11,6 +11,7 @@ import Sortable from 'sortablejs';
 let profileAvatar = null
 let polygonKey = null
 let databentoKey = null
+let ibkrHost = null
 
 const newAvailableTags = reactive([])
 const availableTagsTags = reactive([])
@@ -481,6 +482,22 @@ const updateAPIS = async () => {
                     apis.push(temp)
                 }
             }
+
+            // TODO: comprobar esto
+            if(ibkrHost != null){
+                let index = apis.findIndex(obj => obj.provider === "ibkr")
+                if (index != -1){
+                    apis[index].key = ibkrHost
+                }
+                else {
+                    let temp = {}
+                    temp.provider = "ibkr"
+                    temp.label = "IBKR"
+                    temp.key = ibkrHost
+                    apis.push(temp)
+                }
+            }
+
             results.set("apis", apis)
             console.log(" apis " + JSON.stringify(apis))
             await results.save().then(async () => {
@@ -563,6 +580,18 @@ const updateAPIS = async () => {
                             <input type="text" class="form-control"
                                 :value="apis.filter(obj => obj.provider === 'databento').length > 0 && apis.filter(obj => obj.provider === 'databento')[0].key ? apis.filter(obj => obj.provider === 'databento')[0].key : ''"
                                 @input="databentoKey = $event.target.value" />
+                        </div>
+                    </div>
+
+                    <div class="row mt-2">
+                        <div class="col-12 col-md-4">Interactive Brokers API<i class="ps-1 uil uil-info-circle"
+                                data-bs-toggle="tooltip"
+                                data-bs-title="Your Interactive Brokers Host will be used to fill out automatically MFE prices when you add new trades as well as provide you with charts for your trades on daily page. Make sure you have configured your TWS API and the port (e.g. http://localhost:7497/)"></i>
+                        </div>
+                        <div class="col-12 col-md-8">
+                            <input type="text" class="form-control"
+                                :value="apis.filter(obj => obj.provider === 'ibkr').length > 0 && apis.filter(obj => obj.provider === 'ibkr')[0].key ? apis.filter(obj => obj.provider === 'ibkr')[0].key : ''"
+                                @input="ibkrHost = $event.target.value" />
                         </div>
                     </div>
 

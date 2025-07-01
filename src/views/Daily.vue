@@ -183,6 +183,7 @@ async function clickTradesModal(param1, param2, param3) {
             apiIndex.value = -1
             let databentoIndex = apis.findIndex(obj => obj.provider === "databento")
             let polygonIndex = apis.findIndex(obj => obj.provider === "polygon")
+            let ibIndex = apis.findIndex(obj => obj.provider === "ibkr")
 
             if (databentoIndex > -1 && apis[databentoIndex].key != "") {
                 apiIndex.value = databentoIndex
@@ -190,7 +191,10 @@ async function clickTradesModal(param1, param2, param3) {
             } else if (polygonIndex > -1 && apis[polygonIndex].key != "") {
                 apiIndex.value = polygonIndex
                 apiSource.value = "polygon"
-            }
+            } else if(ibIndex > -1 && apis[ibIndex].key != "") {
+                apiIndex.value = ibIndex
+                apiSource.value = "ibkr"
+            } 
 
             let awaitClick = async () => {
 
@@ -233,6 +237,7 @@ async function clickTradesModal(param1, param2, param3) {
                         apiKey.value = apis[apiIndex.value].key
                         let filteredTradesObject = filteredTrades[itemTradeIndex.value].trades[param3]
                         if (apiKey.value) {
+                            // TODO: add the check for futures if using IBKR API
                             if (filteredTradesObject.type == "future" && (databentoIndex === -1 || apis[databentoIndex].key === "")) {
                                 candlestickChartFailureMessage.value = "You need a Databento API for Futures."
                             } else {
@@ -759,8 +764,59 @@ function getOHLC(date, symbol, type) {
             resolve()
 
         })
-    }
+   } else if (apiSource.value === "ibkr") {
+        // TODO: improve this for allowing TWS API
+        return new Promise(async (resolve, reject) => {
+            try {
+                const response = await axios.get(
+                    `https://localhost:7497/v1/api/iserver/marketdata/history`,
+                    {
+                        params: {
+                            conid: conid,
+                            period: duration,
+                            bar: barSize,
+                        },
+                        httpsAgent: agent,
+                    }
+                );
 
+                const data = response.data.data;
+
+                let tempArray = {
+                    date: date,
+                    symbol: symbol,
+                    ohlcTimestamps: [],
+                    ohlcPrices: [],
+                    ohlcVolumes: [],
+                };
+
+                let temp = {
+                    symbol: symbol,
+                    ohlcv: data,
+                };
+
+                ohlcv.push(temp); // MFE calc
+
+                for (let i = 0; i < data.length; i++) {
+                    const bar = data[i];
+                    let temp = [];
+
+                    tempArray.ohlcTimestamps.push(new Date(bar.t).getTime()); // Convert to ms timestamp
+                    temp.push(bar.c);
+                    temp.push(bar.o);
+                    temp.push(bar.l);
+                    temp.push(bar.h);
+                    tempArray.ohlcPrices.push(temp);
+                    tempArray.ohlcVolumes.push(bar.v);
+                }
+
+                ohlcArray.push(tempArray);
+                resolve();
+            } catch (error) {
+                reject(error);
+            }
+        });
+    }
 }
 
 </script>
