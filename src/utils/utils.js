@@ -1278,6 +1278,10 @@ export function useTimeDuration(param) {
     return dayjs.duration(param * 1000).format("HH:mm:ss")
 }
 
+export function useIBKREndDateTimeFormat(param) {
+    return dayjs.unix(param).tz(timeZoneTrade.value).format("YYYYMMDD HH:mm:ss")
+}
+
 export function useSwingDuration(param) {
     let duration = Number(dayjs.duration(param * 1000).format("D"))
     let period

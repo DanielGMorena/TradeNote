@@ -634,18 +634,23 @@ export async function useBrokerInteractiveBrokers(param, param2) {
                     let temp = {}
                     temp.Account = element.ClientAccountID
 
-                    let tempDate = element["Date/Time"].split(";")[0]
-                    let tempTime = element["Date/Time"].split(";")[1]
+                    const dateTimeStr = element["Date/Time"]; // e.g., "20250708;093055"
+                    const [datePart, timePart] = dateTimeStr.split(";");
 
+                    // We need to assign timezone to America/New_York (default for IBKR servers)
+                    const parsedEastern = dayjs.tz(
+                        `${datePart} ${timePart}`,
+                        "YYYYMMDD HHmmss",
+                        "America/New_York"
+                        );
 
-                    //console.log("element.TradeDate. " + element.TradeDate)
-                    let tempYear = tempDate.slice(0, 4)
-                    let tempMonth = tempDate.slice(4, 6)
-                    let tempDay = tempDate.slice(6, 8)
-                    let newDate = tempMonth + "/" + tempDay + "/" + tempYear
+                    // Then, we convert it to the app's display timezone
+                    const parsedLocal = parsedEastern.tz(timeZoneTrade.value);
 
-                    temp["T/D"] = newDate
-                    temp["S/D"] = newDate
+                    temp["T/D"] = parsedLocal.format("MM/DD/YYYY");
+                    temp["S/D"] = parsedLocal.format("MM/DD/YYYY");
+                    temp["Exec Time"] = parsedLocal.format("HH:mm:ss");
+
                     temp.Currency = element.CurrencyPrimary
                     //Type
                     temp.Type = "stock"
@@ -681,12 +686,6 @@ export async function useBrokerInteractiveBrokers(param, param2) {
 
                     temp.Qty = Number(element.Quantity) < 0 ? (-Number(element.Quantity)).toString() : element.Quantity
                     temp.Price = element.Price
-
-                    let tempEntryHour = tempTime.slice(0, 2)
-                    let tempEntryMinutes = tempTime.slice(2, 4)
-                    let tempEntrySeconds = tempTime.slice(4, 6)
-
-                    temp["Exec Time"] = tempEntryHour + ":" + tempEntryMinutes + ":" + tempEntrySeconds
                     
                     let commNum = Number(element.Commission)
                     temp.Comm = (-commNum).toString()
@@ -706,7 +705,7 @@ export async function useBrokerInteractiveBrokers(param, param2) {
                     tradesData.push(temp)
                 }
             });
-            //console.log(" -> Trades Data\n" + JSON.stringify(tradesData))
+            // console.log(" -> Trades Data\n" + JSON.stringify(tradesData))
         } catch (error) {
             console.log("  --> ERROR " + error)
             reject(error)

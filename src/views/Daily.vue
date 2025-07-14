@@ -8,7 +8,7 @@ import Screenshot from '../components/Screenshot.vue'
 
 import { spinnerLoadingPage, calendarData, filteredTrades, screenshots, diaries, modalDailyTradeOpen, amountCase, markerAreaOpen, screenshot, tradeScreenshotChanged, excursion, tradeExcursionChanged, spinnerSetups, spinnerSetupsText, tradeExcursionId, tradeExcursionDateUnix, hasData, tradeId, excursions, saveButton, itemTradeIndex, tradeIndex, tradeIndexPrevious, spinnerLoadMore, endOfList, selectedGrossNet, availableTags, tradeTagsChanged, tagInput, tags, tradeTags, showTagsList, selectedTagIndex, tradeTagsId, tradeTagsDateUnix, newTradeTags, notes, tradeNote, tradeNoteChanged, tradeNoteDateUnix, tradeNoteId, availableTagsArray, timeZoneTrade, screenshotsInfos, idCurrentType, idCurrentNumber, tabGettingScreenshots, currentUser, apis, satisfactionTradeArray, satisfactionArray } from '../stores/globals';
 
-import { useCreatedDateFormat, useTwoDecCurrencyFormat, useTimeFormat, useTimeDuration, useMountDaily, useGetSelectedRange, useLoadMore, useCheckVisibleScreen, useDecimalsArithmetic, useInitTooltip, useDateCalFormat, useSwingDuration, useStartOfDay, useInitTab } from '../utils/utils';
+import { useCreatedDateFormat, useIBKREndDateTimeFormat, useTwoDecCurrencyFormat, useTimeFormat, useTimeDuration, useMountDaily, useGetSelectedRange, useLoadMore, useCheckVisibleScreen, useDecimalsArithmetic, useInitTooltip, useDateCalFormat, useSwingDuration, useStartOfDay, useInitTab } from '../utils/utils';
 
 import { useSetupImageUpload, useSaveScreenshot, useGetScreenshots } from '../utils/screenshots';
 
@@ -237,7 +237,6 @@ async function clickTradesModal(param1, param2, param3) {
                         apiKey.value = apis[apiIndex.value].key
                         let filteredTradesObject = filteredTrades[itemTradeIndex.value].trades[param3]
                         if (apiKey.value) {
-                            // TODO: add the check for futures if using IBKR API
                             if (filteredTradesObject.type == "future" && (databentoIndex === -1 || apis[databentoIndex].key === "")) {
                                 candlestickChartFailureMessage.value = "You need a Databento API for Futures."
                             } else {
@@ -765,22 +764,31 @@ function getOHLC(date, symbol, type) {
 
         })
    } else if (apiSource.value === "ibkr") {
-        // TODO: improve this for allowing TWS API
         return new Promise(async (resolve, reject) => {
             try {
-                const response = await axios.get(
-                    `https://localhost:7497/v1/api/iserver/marketdata/history`,
-                    {
-                        params: {
-                            conid: conid,
-                            period: duration,
-                            bar: barSize,
-                        },
-                        httpsAgent: agent,
-                    }
-                );
+                // We add +1 day as we need to pass to the API the end datetime.
+                const nextDayTimestamp = dayjs.unix(date).add(1, 'day').startOf('day').unix();
+                // IB format: 'YYYYMMDD HH:mm:ss'
+                const endDateTime = useIBKREndDateTimeFormat(nextDayTimestamp); 
 
-                const data = response.data.data;
+                const response = await axios.get(`${apiKey.value}/histMktData/`, {
+                    params: {
+                        symbol: symbol,
+                        duration: "1 D",
+                        bar_size: "1 min",
+                        what_to_show: "TRADES",
+                        use_rth: false,
+                        end_datetime: endDateTime,
+                        format_date: 1,
+                    },
+                });
+
+                const data = response.data;
+
+                if (!data || data.length === 0) {
+                    console.warn("⚠️ No historical data returned.");
+                    return reject("No historical data.");
+                }
 
                 let tempArray = {
                     date: date,
@@ -790,29 +798,34 @@ function getOHLC(date, symbol, type) {
                     ohlcVolumes: [],
                 };
 
-                let temp = {
+                let ohlcvEntry = {
                     symbol: symbol,
                     ohlcv: data,
                 };
 
-                ohlcv.push(temp); // MFE calc
+                ohlcv.push(ohlcvEntry);
 
-                for (let i = 0; i < data.length; i++) {
-                    const bar = data[i];
-                    let temp = [];
+                for (const bar of data) {
+                    const timestamp = dayjs(bar.date).valueOf();
 
-                    tempArray.ohlcTimestamps.push(new Date(bar.t).getTime()); // Convert to ms timestamp
-                    temp.push(bar.c);
-                    temp.push(bar.o);
-                    temp.push(bar.l);
-                    temp.push(bar.h);
-                    tempArray.ohlcPrices.push(temp);
-                    tempArray.ohlcVolumes.push(bar.v);
+                    const price = [
+                        bar.close, // C
+                        bar.open,  // O
+                        bar.low,   // L
+                        bar.high   // H
+                    ];
+
+                    tempArray.ohlcTimestamps.push(timestamp);
+                    tempArray.ohlcPrices.push(price);
+                    tempArray.ohlcVolumes.push(bar.volume);
                 }
 
                 ohlcArray.push(tempArray);
+
+                console.log("✅ IBKR candle data retrieved via Flask backend.");
                 resolve();
             } catch (error) {
+                console.error("❌ Error fetching IBKR data:", error.response?.data || error.message || error);
                 reject(error);
             }
         });
