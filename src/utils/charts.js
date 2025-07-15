@@ -1867,11 +1867,24 @@ export function useCandlestickChart(ohlcTimestamps, ohlcPrices, ohlcVolumes, tra
                     color: "rgba(255, 255, 255, 1)"
                 },
                 formatter: function (param) {
-                    //console.log(" param "+JSON.stringify(param[0]))
-                    // ?, close, open, low, high
-                    let color
-                    param[0].data[1] >= param[0].data[2] ? color = "#47b262" : color = "#eb5454"
-                    return param[0].name + " - O <span style='color: " + color + "'>" + useXDecFormat(param[0].data[2], decimals) + "</span> H <span style='color: " + color + "'>" + useXDecFormat(param[0].data[4], decimals) + "</span> L <span style='color: " + color + "'>" + useXDecFormat(param[0].data[3], decimals) + "</span> C <span style='color: " + color + "'>" + useXDecFormat(param[0].data[1], decimals)
+                    const ohlc = param[0]; // Candlestick
+                    const volume = param[1]; // Volume bar
+
+                    const open = ohlc.data[2];
+                    const close = ohlc.data[1];
+                    const low = ohlc.data[3];
+                    const high = ohlc.data[4];
+                    const vol = volume.data;
+
+                    const color = close >= open ? "#47b262" : "#eb5454";
+
+                    return `${ohlc.name} - 
+                        O <span style='color: ${color}'>${useXDecFormat(open, decimals)}</span> 
+                        H <span style='color: ${color}'>${useXDecFormat(high, decimals)}</span> 
+                        L <span style='color: ${color}'>${useXDecFormat(low, decimals)}</span> 
+                        C <span style='color: ${color}'>${useXDecFormat(close, decimals)}</span> 
+                        <br>
+                        Volume: <span style='color: ${color}'>${useXDecFormat(vol, 0)}</span>`;
                 },
                 position: function (pos, params, el, elRect, size) {
                     var obj = { top: 5 };
@@ -1888,23 +1901,45 @@ export function useCandlestickChart(ohlcTimestamps, ohlcPrices, ohlcVolumes, tra
                 },
             ],
             xAxis: {
+                type: 'category',
                 data: ohlcTimestamps.map((dateInMilliseconds) => {
                     return useHourMinuteFormat(dateInMilliseconds / 1000)
                 }),
+                scale: true,
+                axisLine: { onZero: false },
+                splitLine: { show: false }, 
                 min: 'dataMin',
                 max: 'dataMax',
 
             },
-            yAxis: {
-                scale: true,
-                splitLine: {
-                    show: true,
-                    lineStyle: {
-                        color: '#333', // dark grey
-                        width: 0.5 // thinner line
+            yAxis: [
+                {
+                    scale: true,
+                    min: function (value) {
+                        // Add padding below lowest price to leave space for volume bars
+                        return value.min - (value.max - value.min) * 0.2;
+                    },
+                    splitLine: {
+                        show: true,
+                        lineStyle: {
+                            color: '#333',
+                            width: 0.5
+                        }
+                    }
+                },
+                {
+                    name: 'Volume',
+                    scale: true,
+                    gridIndex: 0,
+                    splitLine: { show: false },
+                    axisLabel: {
+                        formatter: function (val) {
+                            return val > 1e6 ? (val / 1e6).toFixed(1) + 'M' :
+                                val > 1e3 ? (val / 1e3).toFixed(1) + 'k' : val;
+                        }
                     }
                 }
-            },
+            ],
             series: [
                 {
                     type: 'candlestick',
@@ -1923,6 +1958,20 @@ export function useCandlestickChart(ohlcTimestamps, ohlcPrices, ohlcVolumes, tra
                         }
                     }
                 },
+                {
+                    type: 'bar',
+                    name: 'Volume',
+                    data: ohlcVolumes,
+                    yAxisIndex: 1,
+                    itemStyle: {
+                        color: function (params) {
+                            // Optional: color by price direction
+                            const [open, close] = ohlcPrices[params.dataIndex];
+                            return close <= open ? '#47b262' : '#eb5454';
+                        },
+                        opacity: 0.5
+                    }
+                }
             ]
         };
 
